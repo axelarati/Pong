@@ -63,9 +63,57 @@ module part2
 	// Put your code here. Your code should produce signals x,y,colour and writeEn/plot
 	// for the VGA controller, in addition to any other functionality your design may require.
 	
+	wire keyboard_up;
+	wire keyboard_down;
+	wire keyboard_w;
+	wire keyboard_s;
+	wire keyboard_enter;
+	wire control_move_pads;
+	wire control_move_ball;
+	wire control_set_up_clear_screen;
+	wire control_clear_screen;
+	wire control_draw_left_pad;
+	wire control_draw_right_pad;
+	wire control_draw_ball;
+	wire control_reset_delta;
+	
+	
+	keyboard_tracker #(.PULSE_OR_HOLD(0)) <keyboard>(.clock(CLOCK_50), 
+		.up(keyboard_up),
+		.down(keyboard_down),
+		.w(keyboard_w),
+		.s(keyboard_s),
+		.enter(keyboard_enter));
+	
     // Instansiate datapath
+	datapath d0(.clk(CLOCK_50), 
+		.resetn(resetn), 
+		.move_left_up(keyboard_up),
+		.move_left_down(keyboard_down),
+		.move_right_up(keyboard_w),
+		.move_right_down(keyboard_s),
+		.set_up_clear_screen(control_set_up_clear_screen),
+		.clear_screen(control_clear_screen),
+		.move_pads(control_move_pads),
+		.move_ball(control_move_ball),
+		.draw_left_pad(control_draw_left_pad),
+		.draw_right_pad(control_draw_right_pad),
+		.draw_ball(control_draw_ball),
+		.reset_delta(control_reset_delta));
 
+	
     // Instansiate FSM control
+	control c0(.clk(CLOCK_50), 
+		.resetn(resetn),
+		.enter(keyboard_enter),
+		.move_pads(control_move_pads),
+		.move_ball(control_move_ball),
+		.set_up_clear_screen(control_set_up_clear_screen),
+		.clear_screen(control_clear_screen),
+		.draw_left_pad(control_draw_left_pad),
+		.draw_right_pad(control_draw_right_pad),
+		.draw_ball(control_draw_ball),
+		.reset_delta(control_reset_delta));
    
     
 endmodule
