@@ -78,7 +78,8 @@ module part2
 	wire control_reset_delta;
 	
 	
-	keyboard_tracker #(.PULSE_OR_HOLD(0)) <keyboard>(.clock(CLOCK_50), 
+	keyboard_tracker #(.PULSE_OR_HOLD(0)) <keyboard>(.clock(CLOCK_50),
+		.reset(resetn),
 		.up(keyboard_up),
 		.down(keyboard_down),
 		.w(keyboard_w),
@@ -135,7 +136,7 @@ module control(
 	output reg plot
 	);
 	
-	localparam 	PAD_COUNTER_LENGTH 			= 0,// TODO
+	localparam 	PAD_COUNTER_LENGTH 			= 4'b1111,// TODO
 				BALL_COUNTER_LENGTH 		= 7'b1000000,
 				FRAME_COUNTER_LENGTH		= 20'b11001011011100110101,
 				CLEAR_SCREEN_COUNTER_LENGTH	= 15'b100101100000000;
@@ -280,6 +281,12 @@ module datapath(
 	reg [6:0] left_pad_y;
 	reg [6:0] right_pad_y;
 	
+	reg [6:0] left_pad_orig_y;
+	reg [6:0] right_pad_orig_y;
+	
+	reg [6:0] left_pad_x;
+	reg [6:0] right_pad_x;
+	
 	reg [7:0] ball_x;
 	reg [6:0] ball_y;
 	
@@ -319,16 +326,46 @@ module datapath(
 			if(move_pads) begin
 				if(move_left_up)
 					left_pad_y <= left_pad_y + PAD_MOVE_DELTA;
+					left_pad_orig_y <= left_pad_orig_y + PAD_MOVE_DELTA;
+					left_pad_x <= LEFT_PAD_X;
 				if(move_right_up)
 					right_pad_y <= right_pad_y + PAD_MOVE_DELTA;
+					right_pad_orig_y <= right_pad_orig_y + PAD_MOVE_DELTA;
+					right_pad_x <= RIGHT_PAD_X;
 				if(move_left_down)
 					left_pad_y <= left_pad_y - PAD_MOVE_DELTA;
+					left_pad_orig_y <= left_pad_orig_y - PAD_MOVE_DELTA;
+					left_pad_x <= LEFT_PAD_X;
 				if(move_right_down)
 					right_pad_y <= right_pad_y - PAD_MOVE_DELTA;
+					right_pad_orig_y <= right_pad_orig_y - PAD_MOVE_DELTA;
+					right_pad_x <= RIGHT_PAD_X;
 			end
 			//if(move_ball)
-			//if(draw_left_pad) // TODO
-			//if(draw_right_pad) // TODO
+			if(draw_left_pad) begin			
+				if (left_pad_y - left_pad_orig_y >= 7) begin
+					left_pad_y <= left_pad_orig_y;
+					left_pad_x <= left_pad_x + 1;
+				end
+				else begin
+					left_pad_y <= left_pad_y + 1;
+				end
+				
+				x <= left_pad_x;
+				y <= left_pad_y;
+			end
+			if(draw_right_pad) begin
+				if (right_pad_y - right_pad_orig_y >= 7) begin
+					right_pad_y <= right_pad_orig_y;
+					right_pad_x <= right_pad_x - 1;
+				end
+				else begin
+					right_pad_y <= right_pad_y + 1;
+				end
+				
+				x <= right_pad_x;
+				y <= right_pad_y;
+			end
 			if(draw_ball) begin
 				if(x_delta == 7'b0001000) begin
 					x_delta <= 0;
