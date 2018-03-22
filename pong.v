@@ -1,9 +1,18 @@
+`include "vga_adapter/vga_adapter.v"
+`include "vga_adapter/vga_address_translator.v"
+`include "vga_adapter/vga_controller.v"
+`include "vga_adapter/vga_pll.v"
+
+`include "PS2MouseKeyboard/PS2_Keyboard_Controller.v"
+`include "PS2MouseKeyboard/Altera_UP_PS2_Command_Out.v"
+`include "PS2MouseKeyboard/Altera_UP_PS2_Data_In.v"
+`include "PS2MouseKeyboard/PS2_Controller.v"
+
 module part2
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		KEY,
-		// Keyboard inputs below 
-		// TODO
+		LEDR,
 		
 		// The ports below are for the VGA output.  Do not change.
 		VGA_CLK,   						//	VGA Clock
@@ -13,11 +22,16 @@ module part2
 		VGA_SYNC_N,						//	VGA SYNC
 		VGA_R,   						//	VGA Red[9:0]
 		VGA_G,	 						//	VGA Green[9:0]
-		VGA_B   						//	VGA Blue[9:0]
+		VGA_B,   						//	VGA Blue[9:0]
+		
+		// Keyboard inputs
+		PS2_CLK,
+		PS2_DAT
 	);
 
 	input			CLOCK_50;				//	50 MHz
 	input [3:0]		KEY;
+	output [9:0] 	LEDR;
 
 	// Declare your inputs and outputs here
 	// Do not change the following outputs
@@ -30,10 +44,16 @@ module part2
 	output	[9:0]	VGA_G;	 				//	VGA Green[9:0]
 	output	[9:0]	VGA_B;   				//	VGA Blue[9:0]
 	
+	inout PS2_CLK;
+	inout PS2_DAT;
+	
 	wire resetn;
 	assign resetn = KEY[0];
 	
 	// Create the colour, x, y and writeEn wires that are inputs to the controller.
+	wire [2:0] colour;
+	wire [7:0] x;
+	wire [6:0] y;
 	wire writeEn;
 
 	// Create an Instance of a VGA controller - there can be only one!
@@ -78,8 +98,11 @@ module part2
 	wire control_reset_delta;
 	
 	
-	keyboard_tracker #(.PULSE_OR_HOLD(0)) <keyboard>(.clock(CLOCK_50),
+	keyboard_tracker #(.PULSE_OR_HOLD(0)) keyboard (
+		.clock(CLOCK_50),
 		.reset(resetn),
+		.PS2_CLK(PS2_CLK),
+		.PS2_DAT(PS2_DAT),
 		.up(keyboard_up),
 		.down(keyboard_down),
 		.w(keyboard_w),
@@ -87,7 +110,8 @@ module part2
 		.enter(keyboard_enter));
 	
     // Instansiate datapath
-	datapath d0(.clk(CLOCK_50), 
+	datapath d0(
+		.clk(CLOCK_50), 
 		.resetn(resetn), 
 		.move_left_up(keyboard_up),
 		.move_left_down(keyboard_down),
@@ -100,11 +124,15 @@ module part2
 		.draw_left_pad(control_draw_left_pad),
 		.draw_right_pad(control_draw_right_pad),
 		.draw_ball(control_draw_ball),
-		.reset_delta(control_reset_delta));
+		.reset_delta(control_reset_delta),
+		.x(x),
+		.y(y),
+		.colour(colour));
 
 	
     // Instansiate FSM control
-	control c0(.clk(CLOCK_50), 
+	control c0(
+		.clk(CLOCK_50), 
 		.resetn(resetn),
 		.enter(keyboard_enter),
 		.move_pads(control_move_pads),
@@ -114,7 +142,9 @@ module part2
 		.draw_left_pad(control_draw_left_pad),
 		.draw_right_pad(control_draw_right_pad),
 		.draw_ball(control_draw_ball),
-		.reset_delta(control_reset_delta));
+		.reset_delta(control_reset_delta),
+		.plot(writeEn),
+		.state_out(LEDR[3:0]));
    
     
 endmodule
@@ -133,11 +163,13 @@ module control(
 	output reg draw_right_pad,
 	output reg draw_ball,
 	output reg reset_delta,
-	output reg plot
+	output reg plot,
+	
+	output reg[3:0] state_out
 	);
 	
-	localparam 	PAD_COUNTER_LENGTH 			= 4'b1111,// TODO
-				BALL_COUNTER_LENGTH 		= 7'b1000000,
+	localparam 	PAD_COUNTER_LENGTH 			= 5'b10000,
+				BALL_COUNTER_LENGTH 		= 5'b10000,
 				FRAME_COUNTER_LENGTH		= 20'b11001011011100110101,
 				CLEAR_SCREEN_COUNTER_LENGTH	= 15'b100101100000000;
 				
@@ -147,7 +179,7 @@ module control(
 	reg [4:0] draw_ball_counter;
 	reg [19:0] frame_counter;
 	reg [14:0] clear_screen_counter;
-	reg [2:0] current_state, next_state; 
+	reg [3:0] current_state, next_state; 
     
     localparam  S_MENU        			= 4'd0,
                 S_MOVE_PADS   			= 4'd1,
@@ -186,37 +218,48 @@ module control(
         // By default make all our signals 0
         move_pads = 0;
 		move_ball = 0;
+		set_up_clear_screen = 0;
+		clear_screen = 0;
 		draw_left_pad = 0;
 		draw_right_pad = 0;
 		draw_ball = 0;
 		reset_delta = 0;
-		plot = 1'b0;
+		plot = 0;
 
         case (current_state)
             S_MOVE_PADS: begin
-				move_pads = 1'b1;
+				move_pads <= 1'b1;
 				end
 			S_MOVE_BALL: begin
-				move_ball = 1'b1;
+				move_ball <= 1'b1;
 				end 
 			S_SET_UP_CLEAR_SCREEN: begin
-				set_up_clear_screen = 1'b1;
+				set_up_clear_screen <= 1'b1;
 				end
 			S_CLEAR_SCREEN: begin
-				clear_screen = 1'b1;
-				plot = 1'b1;
+				clear_screen <= 1'b1;
+				plot <= 1'b1;
 				end
 			S_DRAW_LEFT_PAD: begin
-				draw_left_pad = 1'b1;
-				plot = 1'b1;
+				draw_left_pad <= 1'b1;
+				plot <= 1'b1;
 				end
 			S_DRAW_RIGHT_PAD: begin
-				draw_right_pad = 1'b1;
-				plot = 1'b1;
+				draw_right_pad <= 1'b1;
+				plot <= 1'b1;
 				end
 			S_DRAW_BALL: begin
-				draw_ball = 1'b1;
-				plot = 1'b1;
+				draw_ball <= 1'b1;
+				plot <= 1'b1;
+				end
+			S_RESET1: begin
+				reset_delta <= 1'b1;
+				end
+			S_RESET2: begin
+				reset_delta <= 1'b1;
+				end
+			S_RESET3: begin
+				reset_delta <= 1'b1;
 				end
 			
         endcase
@@ -250,13 +293,17 @@ module control(
 		
 		end
     end // state_FFS
+	
+	always @(*) begin
+		state_out <= current_state;
+	end
 endmodule
 
 module datapath(
 	input clk,
 	input resetn,
 	
-	// From keybaord
+	// From keyboard
 	input move_left_up, 
 	input move_right_up,
 	input move_left_down,
@@ -266,7 +313,7 @@ module datapath(
 	input set_up_clear_screen,
 	input clear_screen,
 	input move_pads,
-	input mode_ball,
+	input move_ball,
 	input draw_left_pad,
 	input draw_right_pad,
 	input draw_ball,
@@ -281,12 +328,6 @@ module datapath(
 	reg [6:0] left_pad_y;
 	reg [6:0] right_pad_y;
 	
-	reg [6:0] left_pad_orig_y;
-	reg [6:0] right_pad_orig_y;
-	
-	reg [6:0] left_pad_x;
-	reg [6:0] right_pad_x;
-	
 	reg [7:0] ball_x;
 	reg [6:0] ball_y;
 	
@@ -294,30 +335,33 @@ module datapath(
 	reg [6:0] y_delta;
 	
 	localparam LEFT_PAD_X = 0, 
-		RIGHT_PAD_X = 7'b1110000,
+		RIGHT_PAD_X = 7'b1111100,
 		PAD_MOVE_DELTA = 6'b000011;
 	
 	always @(posedge clk) begin
 		if(!resetn) begin
-			left_pad_y <= 0;
-			right_pad_y <= 0;
-			ball_x <= 7'b0111111;
+			left_pad_y <= 6'b01000;
+			right_pad_y <= 6'b010000;
+			ball_x <= 7'b0011111;
 			ball_y <= 6'b011111;
 			x_delta <= 0;
 			y_delta <= 0;
 		end
 		else begin
 			if(set_up_clear_screen) begin
-				x <= 0;
-				y <= 0;
+				x_delta <= 0;
+				y_delta <= 0;
 			end
 			if(clear_screen) begin
-				if(x == 159) begin
-					x <= 0;
-					y <= y+1;
+				if(x_delta == 159) begin
+					x_delta <= 0;
+					y_delta <= y_delta+1;
 				end
 				else
-					x <= x + 1;
+					x_delta <= x_delta + 1;
+				
+				x <= x_delta;
+				y <= y_delta;
 			end
 			if(reset_delta) begin
 				x_delta <= 0;
@@ -325,46 +369,42 @@ module datapath(
 			end
 			if(move_pads) begin
 				if(move_left_up)
-					left_pad_y <= left_pad_y + PAD_MOVE_DELTA;
-					left_pad_orig_y <= left_pad_orig_y + PAD_MOVE_DELTA;
-					left_pad_x <= LEFT_PAD_X;
+					if(left_pad_y - PAD_MOVE_DELTA > 0)
+						left_pad_y <= left_pad_y - PAD_MOVE_DELTA;
 				if(move_right_up)
-					right_pad_y <= right_pad_y + PAD_MOVE_DELTA;
-					right_pad_orig_y <= right_pad_orig_y + PAD_MOVE_DELTA;
-					right_pad_x <= RIGHT_PAD_X;
+					if(right_pad_y - PAD_MOVE_DELTA > 0)
+						right_pad_y <= right_pad_y - PAD_MOVE_DELTA;
 				if(move_left_down)
-					left_pad_y <= left_pad_y - PAD_MOVE_DELTA;
-					left_pad_orig_y <= left_pad_orig_y - PAD_MOVE_DELTA;
-					left_pad_x <= LEFT_PAD_X;
+					if(left_pad_y + PAD_MOVE_DELTA <= 104)
+						left_pad_y <= left_pad_y + PAD_MOVE_DELTA;
 				if(move_right_down)
-					right_pad_y <= right_pad_y - PAD_MOVE_DELTA;
-					right_pad_orig_y <= right_pad_orig_y - PAD_MOVE_DELTA;
-					right_pad_x <= RIGHT_PAD_X;
+					if(right_pad_y + PAD_MOVE_DELTA <= 104)
+						right_pad_y <= right_pad_y + PAD_MOVE_DELTA;
 			end
-			//if(move_ball)
+			//if(move_ball) 
 			if(draw_left_pad) begin			
-				if (left_pad_y - left_pad_orig_y >= 7) begin
-					left_pad_y <= left_pad_orig_y;
-					left_pad_x <= left_pad_x + 1;
+				if (y_delta >= 7) begin
+					y_delta <= 0;
+					x_delta <= x_delta +1;
 				end
 				else begin
-					left_pad_y <= left_pad_y + 1;
+					y_delta <= y_delta +1;
 				end
 				
-				x <= left_pad_x;
-				y <= left_pad_y;
+				x <= LEFT_PAD_X + x_delta;
+				y <= left_pad_y + y_delta;
 			end
 			if(draw_right_pad) begin
-				if (right_pad_y - right_pad_orig_y >= 7) begin
-					right_pad_y <= right_pad_orig_y;
-					right_pad_x <= right_pad_x - 1;
+				if (y_delta >= 7) begin
+					y_delta <= 0;
+					x_delta <= x_delta + 1;
 				end
 				else begin
-					right_pad_y <= right_pad_y + 1;
+					y_delta <= y_delta + 1;
 				end
 				
-				x <= right_pad_x;
-				y <= right_pad_y;
+				x <= RIGHT_PAD_X + x_delta;
+				y <= right_pad_y + y_delta;
 			end
 			if(draw_ball) begin
 				if(x_delta == 7'b0001000) begin
@@ -384,7 +424,9 @@ module datapath(
 	reg [7:0] x_dist;
 	reg [7:0] y_dist;
 	always @(*) begin
-		if(draw_left_pad || draw_right_pad)
+		if(clear_screen)
+			colour <= 3'b000;
+		else if(draw_left_pad || draw_right_pad)
 			colour <= 3'b111;
 		else if(draw_ball) begin
 			// Calculate distance to center
@@ -393,11 +435,11 @@ module datapath(
 			
 			// Decide whether to draw a pixel or not
 			if(x_dist * x_dist + y_dist * y_dist <= 7'b0000100 * 7'b0000100)
-				colour <= 3'b111;
+				colour <= 3'b110;
 			else
-				colour <= 0;
+				colour <= 3'b000;
 		end	
 		else
-			colour <= 0;
+			colour <= 3'b000;
 	end
 endmodule
