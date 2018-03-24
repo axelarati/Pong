@@ -8,7 +8,7 @@
 `include "PS2MouseKeyboard/Altera_UP_PS2_Data_In.v"
 `include "PS2MouseKeyboard/PS2_Controller.v"
 
-module part2
+module pong
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		KEY,
@@ -349,13 +349,20 @@ module datapath(
 	
 	reg [7:0] ball_x;
 	reg [6:0] ball_y;
+	reg [7:0] speed_x;
+	reg [6:0] speed_y;
+	reg ball_right;
+	reg ball_down;
+	reg change_direction;
 	
 	reg [7:0] x_delta;
 	reg [6:0] y_delta;
 	
 	localparam LEFT_PAD_X = 0, 
 		RIGHT_PAD_X = 7'b1111100,
-		PAD_MOVE_DELTA = 6'b000011;
+		PAD_MOVE_DELTA = 6'b000011,
+		PAD_WIDTH = 7'b0000010,
+		BALL_WIDTH = 4;
 	
 	always @(posedge clk) begin
 		if(!resetn) begin
@@ -365,6 +372,11 @@ module datapath(
 			ball_y <= 6'b011111;
 			x_delta <= 0;
 			y_delta <= 0;
+			speed_x <= 7'b0000001;
+			speed_y <= 6'b000001;
+			ball_right = 1'b1;
+			ball_down = 1'b1;
+			change_direction = 0;
 		end
 		else begin
 			if(reset_delta) begin
@@ -412,7 +424,48 @@ module datapath(
 					if(right_pad_y + PAD_MOVE_DELTA <= 104)
 						right_pad_y <= right_pad_y + PAD_MOVE_DELTA;
 			end
-			//if(move_ball) 
+			if(move_ball) begin
+				change_direction <= 0;
+				if(ball_right) begin
+					if(ball_x + BALL_WIDTH + speed_x >= RIGHT_PAD_X) begin
+						ball_x <= RIGHT_PAD_X - BALL_WIDTH;
+						change_direction <= 1'b1;
+					end
+					else
+						ball_x <= ball_x + speed_x;
+				end
+				else begin
+					if(ball_x - speed_x <= LEFT_PAD_X + PAD_WIDTH) begin
+						ball_x <= LEFT_PAD_X + PAD_WIDTH;
+						change_direction <= 1'b1;
+					end
+					else
+						ball_x <= ball_x - speed_x;
+				end
+				
+				if(ball_down) begin
+					if(ball_y + BALL_WIDTH + speed_y >= 104) begin
+						ball_y <= 104 - BALL_WIDTH;
+						change_direction <= 1'b1;
+					end
+					else
+						ball_y <= ball_y + speed_y;
+				end
+				else begin
+					if(ball_y - speed_y <= 0) begin
+						ball_y <= 0;
+						change_direction <= 1'b1;
+					end
+					else
+						ball_y <= ball_y - speed_y;
+				end
+				
+				// Decide new direction and speed
+				if(change_direction) begin
+					ball_right <= !ball_right;
+					ball_down <= !ball_down;
+				end
+			end			
 			if(draw_left_pad) begin			
 				if (y_delta >= 7) begin
 					y_delta <= 0;
