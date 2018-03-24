@@ -92,8 +92,11 @@ module part2
 	wire control_move_ball;
 	wire control_set_up_clear_screen;
 	wire control_clear_screen;
+	wire control_set_up_left_pad;
 	wire control_draw_left_pad;
+	wire control_set_up_right_pad;
 	wire control_draw_right_pad;
+	wire control_set_up_ball;
 	wire control_draw_ball;
 	wire control_reset_delta;
 	
@@ -121,8 +124,11 @@ module part2
 		.clear_screen(control_clear_screen),
 		.move_pads(control_move_pads),
 		.move_ball(control_move_ball),
+		.set_up_left_pad(control_set_up_left_pad),
 		.draw_left_pad(control_draw_left_pad),
+		.set_up_right_pad(control_draw_right_pad),
 		.draw_right_pad(control_draw_right_pad),
+		.set_up_ball(control_set_up_ball),
 		.draw_ball(control_draw_ball),
 		.reset_delta(control_reset_delta),
 		.x(x),
@@ -139,8 +145,11 @@ module part2
 		.move_ball(control_move_ball),
 		.set_up_clear_screen(control_set_up_clear_screen),
 		.clear_screen(control_clear_screen),
+		.set_up_left_pad(control_set_up_left_pad),
 		.draw_left_pad(control_draw_left_pad),
+		.set_up_right_pad(control_set_up_right_pad),
 		.draw_right_pad(control_draw_right_pad),
+		.set_up_ball(control_set_up_ball),
 		.draw_ball(control_draw_ball),
 		.reset_delta(control_reset_delta),
 		.plot(writeEn),
@@ -159,8 +168,11 @@ module control(
 	output reg move_ball,
 	output reg set_up_clear_screen,
 	output reg clear_screen,
+	output reg set_up_left_pad,
 	output reg draw_left_pad,
+	output reg set_up_right_pad,
 	output reg draw_right_pad,
+	output reg set_up_ball,
 	output reg draw_ball,
 	output reg reset_delta,
 	output reg plot,
@@ -169,7 +181,7 @@ module control(
 	);
 	
 	localparam 	PAD_COUNTER_LENGTH 			= 5'b10000,
-				BALL_COUNTER_LENGTH 		= 5'b10000,
+				BALL_COUNTER_LENGTH 		= 5'b11001,
 				FRAME_COUNTER_LENGTH		= 20'b11001011011100110101,
 				CLEAR_SCREEN_COUNTER_LENGTH	= 15'b100101100000000;
 				
@@ -186,12 +198,12 @@ module control(
                 S_MOVE_BALL 			= 4'd2,
 				S_SET_UP_CLEAR_SCREEN	= 4'd3,
 				S_CLEAR_SCREEN			= 4'd4,
-                S_DRAW_LEFT_PAD  		= 4'd5,
-				S_RESET1				= 4'd6,
-				S_DRAW_RIGHT_PAD		= 4'd7,
-				S_RESET2				= 4'd8,
-				S_DRAW_BALL				= 4'd9,
-				S_RESET3				= 4'd10,
+				S_SET_UP_LEFT			= 4'd5,
+                S_DRAW_LEFT_PAD  		= 4'd6,
+				S_SET_UP_RIGHT			= 4'd7,
+				S_DRAW_RIGHT_PAD		= 4'd8,
+				S_SET_UP_BALL			= 4'd9,
+				S_DRAW_BALL				= 4'd10,
 				S_WAIT					= 4'd11;
 	
 	always @(*)
@@ -201,13 +213,13 @@ module control(
                 S_MOVE_PADS: next_state = S_MOVE_BALL;
                 S_MOVE_BALL: next_state = S_SET_UP_CLEAR_SCREEN; 
 				S_SET_UP_CLEAR_SCREEN: next_state = S_CLEAR_SCREEN;
-				S_CLEAR_SCREEN: next_state = (clear_screen_counter == 0) ? S_DRAW_LEFT_PAD : S_CLEAR_SCREEN;
-                S_DRAW_LEFT_PAD: next_state = (draw_left_pad_counter == 0) ? S_RESET1: S_DRAW_LEFT_PAD;
-				S_RESET1: next_state = S_DRAW_RIGHT_PAD;
-				S_DRAW_RIGHT_PAD: next_state = (draw_right_pad_counter == 0) ? S_RESET2 : S_DRAW_RIGHT_PAD;
-				S_RESET2: next_state = S_DRAW_BALL;
-				S_DRAW_BALL: next_state = (draw_ball_counter == 0) ? S_RESET3 : S_DRAW_BALL;
-				S_RESET3: next_state = S_WAIT;
+				S_CLEAR_SCREEN: next_state = (clear_screen_counter == 0) ? S_SET_UP_LEFT : S_CLEAR_SCREEN;
+				S_SET_UP_LEFT: next_state = S_DRAW_LEFT_PAD;
+                S_DRAW_LEFT_PAD: next_state = (draw_left_pad_counter == 0) ? S_SET_UP_RIGHT: S_DRAW_LEFT_PAD;
+				S_SET_UP_RIGHT: next_state = S_DRAW_RIGHT_PAD;
+				S_DRAW_RIGHT_PAD: next_state = (draw_right_pad_counter == 0) ? S_SET_UP_BALL : S_DRAW_RIGHT_PAD;
+				S_SET_UP_BALL: next_state = S_DRAW_BALL;
+				S_DRAW_BALL: next_state = (draw_ball_counter == 0) ? S_WAIT : S_DRAW_BALL;
 				S_WAIT: next_state = (frame_counter == 0) ? S_MOVE_PADS : S_WAIT;
 			default:     next_state = S_MENU;
         endcase
@@ -234,6 +246,7 @@ module control(
 				move_ball <= 1'b1;
 				end 
 			S_SET_UP_CLEAR_SCREEN: begin
+				reset_delta <= 1'b1;
 				set_up_clear_screen <= 1'b1;
 				end
 			S_CLEAR_SCREEN: begin
@@ -252,13 +265,16 @@ module control(
 				draw_ball <= 1'b1;
 				plot <= 1'b1;
 				end
-			S_RESET1: begin
+			S_SET_UP_LEFT: begin
+				set_up_left_pad <= 1'b1;
 				reset_delta <= 1'b1;
 				end
-			S_RESET2: begin
+			S_SET_UP_RIGHT: begin
+				set_up_right_pad <= 1'b1;
 				reset_delta <= 1'b1;
 				end
-			S_RESET3: begin
+			S_SET_UP_BALL: begin
+				set_up_ball <= 1'b1;
 				reset_delta <= 1'b1;
 				end
 			
@@ -314,8 +330,11 @@ module datapath(
 	input clear_screen,
 	input move_pads,
 	input move_ball,
+	input set_up_left_pad,
 	input draw_left_pad,
+	input set_up_right_pad,
 	input draw_right_pad,
+	input set_up_ball,
 	input draw_ball,
 	input reset_delta,
 	
@@ -348,9 +367,25 @@ module datapath(
 			y_delta <= 0;
 		end
 		else begin
-			if(set_up_clear_screen) begin
+			if(reset_delta) begin
 				x_delta <= 0;
 				y_delta <= 0;
+			end
+			if(set_up_clear_screen) begin
+				x <= 0;
+				y <= 0;
+			end
+			if(set_up_left_pad) begin
+				x <= LEFT_PAD_X;
+				y <= left_pad_y;
+			end
+			if(set_up_right_pad) begin
+				x <= RIGHT_PAD_X;
+				y <= right_pad_y;
+			end
+			if(set_up_ball) begin
+				x <= ball_x;
+				y <= ball_y;
 			end
 			if(clear_screen) begin
 				if(x_delta == 159) begin
@@ -362,10 +397,6 @@ module datapath(
 				
 				x <= x_delta;
 				y <= y_delta;
-			end
-			if(reset_delta) begin
-				x_delta <= 0;
-				y_delta <= 0;
 			end
 			if(move_pads) begin
 				if(move_left_up)
@@ -407,12 +438,13 @@ module datapath(
 				y <= right_pad_y + y_delta;
 			end
 			if(draw_ball) begin
-				if(x_delta == 7'b0001000) begin
+				if(x_delta >= 4) begin
 					x_delta <= 0;
 					y_delta <= y_delta + 1;
 				end
-				else
+				else begin
 					x_delta <= x_delta +1;
+				end
 				
 				x <= ball_x + x_delta;
 				y <= ball_y + y_delta;
@@ -430,12 +462,12 @@ module datapath(
 			colour <= 3'b111;
 		else if(draw_ball) begin
 			// Calculate distance to center
-			x_dist <= (x_delta < 7'b0000100) ? 7'b0000100 - x_delta : x_delta - 7'b0000100;
-			y_dist <= {1'b0, (y_delta < 6'b000100) ? 6'b000100 - y_delta : y_delta - 6'b000100};
+			x_dist <= (x_delta < 2) ? 2 - x_delta : x_delta - 2;
+			y_dist <= (y_delta < 2) ? 2 - y_delta : y_delta - 2;
 			
 			// Decide whether to draw a pixel or not
-			if(x_dist * x_dist + y_dist * y_dist <= 7'b0000100 * 7'b0000100)
-				colour <= 3'b110;
+			if(x_dist * x_dist + y_dist * y_dist <= 4)
+				colour <= 3'b111;
 			else
 				colour <= 3'b000;
 		end	
