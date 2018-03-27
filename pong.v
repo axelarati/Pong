@@ -52,8 +52,8 @@ module pong
 	
 	// Create the colour, x, y and writeEn wires that are inputs to the controller.
 	wire [2:0] colour;
-	wire [7:0] x;
-	wire [6:0] y;
+	wire [8:0] x;
+	wire [7:0] y;
 	wire writeEn;
 
 	// Create an Instance of a VGA controller - there can be only one!
@@ -116,10 +116,10 @@ module pong
 	datapath d0(
 		.clk(CLOCK_50), 
 		.resetn(resetn), 
-		.move_left_up(keyboard_up),
-		.move_left_down(keyboard_down),
-		.move_right_up(keyboard_w),
-		.move_right_down(keyboard_s),
+		.move_left_up(keyboard_w),
+		.move_left_down(keyboard_s),
+		.move_right_up(keyboard_up),
+		.move_right_down(keyboard_down),
 		.set_up_clear_screen(control_set_up_clear_screen),
 		.clear_screen(control_clear_screen),
 		.move_pads(control_move_pads),
@@ -181,7 +181,7 @@ module control(
 	);
 	
 	localparam 	PAD_COUNTER_LENGTH 			= 5'b10000,
-				BALL_COUNTER_LENGTH 		= 5'b11001,
+				BALL_COUNTER_LENGTH 		= 5'b10100,
 				FRAME_COUNTER_LENGTH		= 20'b11001011011100110101,
 				CLEAR_SCREEN_COUNTER_LENGTH	= 15'b100101100000000;
 				
@@ -339,41 +339,41 @@ module datapath(
 	input reset_delta,
 	
 	// Output to VGA
-	output reg[7:0] x,
-	output reg[6:0] y,
+	output reg[8:0] x,
+	output reg[7:0] y,
 	output reg[2:0] colour
 	);
 	
-	reg [6:0] left_pad_y;
-	reg [6:0] right_pad_y;
+	reg [7:0] left_pad_y;
+	reg [7:0] right_pad_y;
 	
-	reg [7:0] ball_x;
-	reg [6:0] ball_y;
-	reg [7:0] speed_x;
-	reg [6:0] speed_y;
+	reg [8:0] ball_x;
+	reg [7:0] ball_y;
+	reg [8:0] speed_x;
+	reg [7:0] speed_y;
 	reg ball_right;
 	reg ball_down;
 	reg change_direction;
 	
-	reg [7:0] x_delta;
-	reg [6:0] y_delta;
+	reg [8:0] x_delta;
+	reg [7:0] y_delta;
 	
 	localparam LEFT_PAD_X = 0, 
-		RIGHT_PAD_X = 7'b1111100,
-		PAD_MOVE_DELTA = 6'b000011,
-		PAD_WIDTH = 7'b0000010,
+		RIGHT_PAD_X = 8'b10011110,
+		PAD_MOVE_DELTA = 7'b0000011,
+		PAD_WIDTH = 8'b00000010,
 		BALL_WIDTH = 4;
 	
 	always @(posedge clk) begin
 		if(!resetn) begin
-			left_pad_y <= 6'b01000;
-			right_pad_y <= 6'b010000;
-			ball_x <= 7'b0011111;
-			ball_y <= 6'b011111;
+			left_pad_y <= 7'b0100000;
+			right_pad_y <= 7'b0100000;
+			ball_x <= 8'b00011111;
+			ball_y <= 7'b0111111;
 			x_delta <= 0;
 			y_delta <= 0;
-			speed_x <= 7'b0000001;
-			speed_y <= 6'b000001;
+			speed_x <= 8'b00000001;
+			speed_y <= 7'b0000001;
 			ball_right = 1'b1;
 			ball_down = 1'b1;
 			change_direction = 0;
@@ -411,25 +411,35 @@ module datapath(
 				y <= y_delta;
 			end
 			if(move_pads) begin
-				if(move_left_up)
-					if(left_pad_y - PAD_MOVE_DELTA > 0)
+				if(move_left_up) begin
+					if($signed(left_pad_y - PAD_MOVE_DELTA) > $signed(0))
 						left_pad_y <= left_pad_y - PAD_MOVE_DELTA;
-				if(move_right_up)
-					if(right_pad_y - PAD_MOVE_DELTA > 0)
+					else
+						left_pad_y <= 0;
+				end
+				if(move_right_up) begin
+					if($signed(right_pad_y - PAD_MOVE_DELTA) > $signed(0))
 						right_pad_y <= right_pad_y - PAD_MOVE_DELTA;
-				if(move_left_down)
-					if(left_pad_y + PAD_MOVE_DELTA <= 104)
+					else right_pad_y <= 0;
+				end
+				if(move_left_down) begin
+					if(left_pad_y + PAD_MOVE_DELTA <= 112)
 						left_pad_y <= left_pad_y + PAD_MOVE_DELTA;
-				if(move_right_down)
-					if(right_pad_y + PAD_MOVE_DELTA <= 104)
+					else
+						left_pad_y <= 112;
+				end
+				if(move_right_down) begin
+					if(right_pad_y + PAD_MOVE_DELTA <= 112)
 						right_pad_y <= right_pad_y + PAD_MOVE_DELTA;
+					else
+						right_pad_y <= 112;
+				end
 			end
 			if(move_ball) begin
-				change_direction <= 0;
 				if(ball_right) begin
 					if(ball_x + BALL_WIDTH + speed_x >= RIGHT_PAD_X) begin
 						ball_x <= RIGHT_PAD_X - BALL_WIDTH;
-						change_direction <= 1'b1;
+						ball_right <= !ball_right;
 					end
 					else
 						ball_x <= ball_x + speed_x;
@@ -437,35 +447,29 @@ module datapath(
 				else begin
 					if(ball_x - speed_x <= LEFT_PAD_X + PAD_WIDTH) begin
 						ball_x <= LEFT_PAD_X + PAD_WIDTH;
-						change_direction <= 1'b1;
+						ball_right <= !ball_right;
 					end
 					else
 						ball_x <= ball_x - speed_x;
 				end
 				
 				if(ball_down) begin
-					if(ball_y + BALL_WIDTH + speed_y >= 104) begin
-						ball_y <= 104 - BALL_WIDTH;
-						change_direction <= 1'b1;
+					if(ball_y + BALL_WIDTH + speed_y >= 120 - BALL_WIDTH) begin
+						ball_y <= 120 - BALL_WIDTH;
+						ball_down <= !ball_down;
 					end
 					else
 						ball_y <= ball_y + speed_y;
 				end
 				else begin
-					if(ball_y - speed_y <= 0) begin
+					if($signed(ball_y - speed_y) <= $signed(0)) begin
 						ball_y <= 0;
-						change_direction <= 1'b1;
+						ball_down <= !ball_down;
 					end
 					else
 						ball_y <= ball_y - speed_y;
 				end
-				
-				// Decide new direction and speed
-				if(change_direction) begin
-					ball_right <= !ball_right;
-					ball_down <= !ball_down;
-				end
-			end			
+			end
 			if(draw_left_pad) begin			
 				if (y_delta >= 7) begin
 					y_delta <= 0;
@@ -491,7 +495,7 @@ module datapath(
 				y <= right_pad_y + y_delta;
 			end
 			if(draw_ball) begin
-				if(x_delta >= 4) begin
+				if(x_delta >= 3) begin
 					x_delta <= 0;
 					y_delta <= y_delta + 1;
 				end
@@ -506,8 +510,8 @@ module datapath(
 	end
 	
 	// Choose colour
-	reg [7:0] x_dist;
-	reg [7:0] y_dist;
+	reg [8:0] x_dist;
+	reg [8:0] y_dist;
 	always @(*) begin
 		if(clear_screen)
 			colour <= 3'b000;
@@ -515,14 +519,17 @@ module datapath(
 			colour <= 3'b111;
 		else if(draw_ball) begin
 			// Calculate distance to center
-			x_dist <= (x_delta < 2) ? 2 - x_delta : x_delta - 2;
-			y_dist <= (y_delta < 2) ? 2 - y_delta : y_delta - 2;
+			/*x_dist <= (x_delta <= 2) ? 2 - x_delta : x_delta - 2;
+			y_dist <= {1'b1,(y_delta <= 2) ? 2 - y_delta : y_delta - 2};
 			
 			// Decide whether to draw a pixel or not
-			if(x_dist * x_dist + y_dist * y_dist <= 4)
-				colour <= 3'b111;
-			else
-				colour <= 3'b000;
+			if(x_delta == 0 & y_delta == 0)
+				colour <= 3'b110;*/
+			//else if(x_dist * x_dist + y_dist * y_dist <= 4)
+			//if((x_delta == 0 || x_delta == 3) && (y_delta == 0 || y_delta == 4))
+			//	colour <= 3'b000;
+			//else
+			colour <= 3'b111;
 		end	
 		else
 			colour <= 3'b000;
