@@ -100,6 +100,11 @@ module pong
 	wire control_draw_ball;
 	wire control_reset_delta;
 	
+	wire ai_up;
+	wire ai_down;
+	wire ai_enable;
+	wire ball_y;
+	wire paddle_y;
 	
 	keyboard_tracker #(.PULSE_OR_HOLD(0)) keyboard (
 		.clock(CLOCK_50),
@@ -110,16 +115,17 @@ module pong
 		.down(keyboard_down),
 		.w(keyboard_w),
 		.s(keyboard_s),
+		.space(ai_enable),
 		.enter(keyboard_enter));
 	
-    // Instansiate datapath
+    // Instantiate datapath
 	datapath d0(
 		.clk(CLOCK_50), 
 		.resetn(resetn), 
 		.move_left_up(keyboard_w),
 		.move_left_down(keyboard_s),
-		.move_right_up(keyboard_up),
-		.move_right_down(keyboard_down),
+		.move_right_up((!ai_enable & keyboard_up) | (ai_enable & ai_up)), // Mux to choose ai or keyboard input
+		.move_right_down((!ai_enable & keyboard_down) | (ai_enable & ai_down)), // Mux to choose ai or keyboard input
 		.set_up_clear_screen(control_set_up_clear_screen),
 		.clear_screen(control_clear_screen),
 		.move_pads(control_move_pads),
@@ -133,10 +139,13 @@ module pong
 		.reset_delta(control_reset_delta),
 		.x(x),
 		.y(y),
-		.colour(colour));
+		.colour(colour),
+		.ball_y(ball_y),
+		.right_pad_y(paddle_y)
+		);
 
 	
-    // Instansiate FSM control
+    // Instantiate FSM control
 	control c0(
 		.clk(CLOCK_50), 
 		.resetn(resetn),
@@ -154,6 +163,16 @@ module pong
 		.reset_delta(control_reset_delta),
 		.plot(writeEn),
 		.state_out(LEDR[3:0]));
+		
+	// Instantiate ai
+	ai_player ai(
+		.clk(CLOCK_50),
+		.resetn(resetn),
+		.ball_y(ball_y),
+		.paddle_y(paddle_y),
+		.ai_up(ai_up),
+		.ai_down(ai_down)
+		);
    
     
 endmodule
@@ -341,14 +360,16 @@ module datapath(
 	// Output to VGA
 	output reg[8:0] x,
 	output reg[7:0] y,
-	output reg[2:0] colour
+	output reg[2:0] colour,
+	
+	// Output to ai
+	output reg [7:0] ball_y,
+	output reg [7:0] right_pad_y
 	);
 	
 	reg [7:0] left_pad_y;
-	reg [7:0] right_pad_y;
 	
 	reg [8:0] ball_x;
-	reg [7:0] ball_y;
 	reg [8:0] speed_x;
 	reg [7:0] speed_y;
 	reg ball_right;
@@ -533,5 +554,24 @@ module datapath(
 		end	
 		else
 			colour <= 3'b000;
+	end
+endmodule
+
+module ai_player(
+	input clk,
+	input resetn,	
+	input ball_y,
+	input paddle_y,
+	output reg ai_up,
+	output reg ai_down
+	);
+	
+	always @(*) begin
+		ai_up <= 0;
+		ai_down <= 0;
+		if(ball_y - 4 <= paddle_y)
+			ai_up <= 1'b1;
+		else if (ball_y +4 >= paddle_y)
+			ai_down <= 1'b1;
 	end
 endmodule
