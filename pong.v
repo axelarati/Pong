@@ -102,6 +102,7 @@ module pong
 	wire control_set_up_ball;
 	wire control_draw_ball;
 	wire control_reset_delta;
+	wire menu;
 	
 	wire ai_up;
 	wire ai_down;
@@ -144,6 +145,7 @@ module pong
 		.set_up_ball(control_set_up_ball),
 		.draw_ball(control_draw_ball),
 		.reset_delta(control_reset_delta),
+		.menu(menu),
 		.x(x),
 		.y(y),
 		.colour(colour),
@@ -277,8 +279,12 @@ module control(
 		draw_ball = 0;
 		reset_delta = 0;
 		plot = 0;
+		menu = 0;
 
         case (current_state)
+			S_MENU: begin
+				menu <= 1'b1;
+				end
             S_MOVE_PADS: begin
 				move_pads <= 1'b1;
 				end
@@ -377,6 +383,7 @@ module datapath(
 	input set_up_ball,
 	input draw_ball,
 	input reset_delta,
+	input menu,
 	
 	// Output to VGA
 	output reg[8:0] x,
@@ -411,7 +418,7 @@ module datapath(
 		BALL_WIDTH = 4;
 	
 	always @(posedge clk) begin
-		if(!resetn) begin
+		if(!resetn || menu) begin
 			left_pad_y <= 7'b0100000;
 			right_pad_y <= 7'b0100000;
 			ball_x <= 8'b00011111;
