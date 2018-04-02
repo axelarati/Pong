@@ -110,7 +110,12 @@ module pong
 	wire ai_down;
 	wire ai_toggle;
 	reg ai_enable;
+	wire [8:0] ball_x;
 	wire [7:0] ball_y;
+	wire [8:0] speed_x;
+	wire [7:0] speed_y;
+	wire ball_down;
+	wire ball_right;
 	wire [7:0] paddle_y;
 	
 	always @(posedge ai_toggle, negedge resetn) begin
@@ -159,7 +164,12 @@ module pong
 		.x(x),
 		.y(y),
 		.colour(colour),
+		.ball_x(ball_x),
 		.ball_y(ball_y),
+		.speed_x(speed_x),
+		.speed_y(speed_y),
+		.ball_down(ball_down),
+		.ball_right(ball_right),
 		.right_pad_y(paddle_y),
 		.gameover(gameover),
 		.left_score(left_score),
@@ -192,7 +202,12 @@ module pong
 	ai_player ai(
 		.clk(CLOCK_50),
 		.resetn(resetn),
+		.ball_x(ball_x),
 		.ball_y(ball_y),
+		.speed_x(speed_x),
+		.speed_y(speed_y),
+		.ball_down(ball_down),
+		.ball_right(ball_right),
 		.paddle_y(paddle_y),
 		.ai_up(ai_up),
 		.ai_down(ai_down)
@@ -406,7 +421,12 @@ module datapath(
 	output reg[2:0] colour,
 	
 	// Output to ai
+	output reg [8:0] ball_x,
 	output reg [7:0] ball_y,
+	output reg [8:0] speed_x,
+	output reg [7:0] speed_y,
+	output reg ball_down,
+	output reg ball_right,
 	output reg [7:0] right_pad_y,
 	output reg gameover,
 	output reg [3:0] left_score,
@@ -415,11 +435,6 @@ module datapath(
 	
 	reg [7:0] left_pad_y;
 	
-	reg [8:0] ball_x;
-	reg [8:0] speed_x;
-	reg [7:0] speed_y;
-	reg ball_right;
-	reg ball_down;
 	reg change_direction;
 	
 	reg [8:0] x_delta;
@@ -606,8 +621,8 @@ module datapath(
 	end
 	
 	// Choose colour
-	reg [8:0] x_dist;
-	reg [8:0] y_dist;
+	//reg [8:0] x_dist;
+	//reg [8:0] y_dist;
 	always @(*) begin
 		if(clear_screen)
 			colour <= 3'b000;
@@ -635,19 +650,48 @@ endmodule
 module ai_player(
 	input clk,
 	input resetn,	
+	input [8:0] ball_x,
 	input [7:0] ball_y,
+	input [8:0] speed_x,
+	input [7:0] speed_y,
+	input ball_down,
+	input ball_right,
 	input [7:0] paddle_y,
 	output reg ai_up,
 	output reg ai_down
 	);
 	
-	always @(*) begin
+	/*always @(*) begin
 		ai_up = 0;
 		ai_down = 0;
 		if(ball_y - 4 <= paddle_y) begin
 			ai_up <= 1'b1;
 		end
 		else if (ball_y + 8 >= paddle_y + 16) begin
+			ai_down <= 1'b1;
+		end
+	end*/
+	
+	reg [8:0] y_dist;
+	reg [8:0] y_target;
+	always @(*) begin
+		ai_up = 0;
+		ai_down = 0;
+		y_dist = (160-ball_x) * (speed_y/speed_x);
+		
+		if(ball_right && ball_x >= 100) begin
+			if(ball_down) begin
+				y_target <= ball_y + y_dist > 120 ? 240 - ball_y-y_dist : ball_y+y_dist;
+			end
+			else begin
+				y_target <= $signed(ball_y - y_dist) < $signed(0) ? y_dist - ball_y: ball_y - y_dist;
+			end
+		end
+		
+		if(y_target - 4 <= paddle_y) begin
+			ai_up <= 1'b1;
+		end
+		else if (y_target + 8 >= paddle_y + 16) begin
 			ai_down <= 1'b1;
 		end
 	end
