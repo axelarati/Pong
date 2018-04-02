@@ -443,7 +443,7 @@ module datapath(
 	localparam LEFT_PAD_X = 8'b00000000, 
 		RIGHT_PAD_X = 8'b10011110,
 		BALL_START_X = 8'b01001110,
-		BALL_START_Y = 7'b0111010,
+		BALL_START_Y = 7'b1011010,
 		PAD_MOVE_DELTA = 7'b0000011,
 		PAD_WIDTH = 2,
 		PAD_HEIGHT = 16,
@@ -529,6 +529,18 @@ module datapath(
 						if(right_pad_y + PAD_HEIGHT >= ball_y + speed_y && right_pad_y <= ball_y + BALL_WIDTH) begin
 							ball_x <= RIGHT_PAD_X - BALL_WIDTH;
 							ball_right <= !ball_right;
+							if(right_pad_y + (PAD_HEIGHT * 3 / 4) >= ball_y) begin
+								speed_y <= 7'b0000010;
+							end
+							else if(right_pad_y + (PAD_HEIGHT / 2) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else if(right_pad_y + (PAD_HEIGHT / 4) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else begin
+								speed_y <= 7'b0000010;
+							end
 						end
 						else begin
 							ball_x <= BALL_START_X;
@@ -547,6 +559,18 @@ module datapath(
 						if(left_pad_y + PAD_HEIGHT >= ball_y + speed_y && left_pad_y <= ball_y + BALL_WIDTH) begin
 							ball_x <= LEFT_PAD_X + PAD_WIDTH;
 							ball_right <= !ball_right;
+							if(left_pad_y + (PAD_HEIGHT * 3 / 4) >= ball_y) begin
+								speed_y <= 7'b0000010;
+							end
+							else if(left_pad_y + (PAD_HEIGHT / 2) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else if(left_pad_y + (PAD_HEIGHT / 4) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else begin
+								speed_y <= 7'b0000010;
+							end
 						end
 						else begin
 							ball_x <= BALL_START_X;
