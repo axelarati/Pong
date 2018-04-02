@@ -108,9 +108,17 @@ module pong
 	
 	wire ai_up;
 	wire ai_down;
-	wire ai_enable;
+	wire ai_toggle;
+	reg ai_enable;
 	wire [7:0] ball_y;
 	wire [7:0] paddle_y;
+	
+	always @(posedge ai_toggle, negedge resetn) begin
+		if(!resetn)
+			ai_enable = 0;
+		else 
+			ai_enable = !ai_enable;
+	end
 	
 	wire gameover;
 	wire [3:0] left_score;
@@ -125,7 +133,7 @@ module pong
 		.down(keyboard_down),
 		.w(keyboard_w),
 		.s(keyboard_s),
-		.space(ai_enable),
+		.space(ai_toggle),
 		.enter(keyboard_enter));
 	
     // Instantiate datapath
