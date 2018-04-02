@@ -13,6 +13,8 @@ module pong
 		CLOCK_50,						//	On Board 50 MHz
 		KEY,
 		LEDR,
+		HEX0,
+		HEX1,
 		
 		// The ports below are for the VGA output.  Do not change.
 		VGA_CLK,   						//	VGA Clock
@@ -107,8 +109,8 @@ module pong
 	wire ai_up;
 	wire ai_down;
 	wire ai_enable;
-	wire ball_y;
-	wire paddle_y;
+	wire [7:0] ball_y;
+	wire [7:0] paddle_y;
 	
 	wire gameover;
 	wire [3:0] left_score;
@@ -163,6 +165,7 @@ module pong
 		.resetn(resetn),
 		.enter(keyboard_enter),
 		.gameover(gameover),
+		.menu(menu),
 		.move_pads(control_move_pads),
 		.move_ball(control_move_ball),
 		.set_up_clear_screen(control_set_up_clear_screen),
@@ -186,6 +189,9 @@ module pong
 		.ai_up(ai_up),
 		.ai_down(ai_down)
 		);
+	assign LEDR[9] = ai_up;
+	assign LEDR[8] = ai_down;
+	assign LEDR[7] = ai_enable;
 		
 	hex_decoder H0(
         .hex_digit(right_score),
@@ -206,6 +212,7 @@ module control(
 	input gameover,
 	
 	// Output based on state
+	output reg menu,
 	output reg move_pads,
 	output reg move_ball,
 	output reg set_up_clear_screen,
@@ -222,14 +229,14 @@ module control(
 	output reg[3:0] state_out
 	);
 	
-	localparam 	PAD_COUNTER_LENGTH 			= 5'b10000,
+	localparam 	PAD_COUNTER_LENGTH 			= 6'b100000,
 				BALL_COUNTER_LENGTH 		= 5'b10100,
 				FRAME_COUNTER_LENGTH		= 20'b11001011011100110101,
 				CLEAR_SCREEN_COUNTER_LENGTH	= 15'b100101100000000;
 				
 	// current_state registers and counters
-	reg [4:0] draw_left_pad_counter;
-	reg [4:0] draw_right_pad_counter;
+	reg [5:0] draw_left_pad_counter;
+	reg [5:0] draw_right_pad_counter;
 	reg [4:0] draw_ball_counter;
 	reg [19:0] frame_counter;
 	reg [14:0] clear_screen_counter;
@@ -410,19 +417,21 @@ module datapath(
 	reg [8:0] x_delta;
 	reg [7:0] y_delta;
 	
-	localparam LEFT_PAD_X = 0, 
+	localparam LEFT_PAD_X = 8'b00000000, 
 		RIGHT_PAD_X = 8'b10011110,
+		BALL_START_X = 8'b01001110,
+		BALL_START_Y = 7'b0111010,
 		PAD_MOVE_DELTA = 7'b0000011,
-		PAD_WIDTH = 8'b00000010,
-		PAD_HEIGHT = 8'b00001000;
+		PAD_WIDTH = 2,
+		PAD_HEIGHT = 16,
 		BALL_WIDTH = 4;
 	
 	always @(posedge clk) begin
 		if(!resetn || menu) begin
 			left_pad_y <= 7'b0100000;
 			right_pad_y <= 7'b0100000;
-			ball_x <= 8'b00011111;
-			ball_y <= 7'b0111111;
+			ball_x <= BALL_START_X;
+			ball_y <= BALL_START_Y;
 			x_delta <= 0;
 			y_delta <= 0;
 			speed_x <= 8'b00000001;
@@ -432,6 +441,7 @@ module datapath(
 			change_direction = 0;
 			left_score <= 0;
 			right_score <= 0;
+			gameover <= 0;
 		end
 		else begin
 			if(reset_delta) begin
@@ -493,13 +503,13 @@ module datapath(
 			if(move_ball) begin
 				if(ball_right) begin
 					if(ball_x + BALL_WIDTH + speed_x >= RIGHT_PAD_X) begin
-						if(right_pad_y + PAD_HEIGHT >= ball_y + BALL_WIDTH + speed_y >= right_pad_y) begin
+						if(right_pad_y + PAD_HEIGHT >= ball_y + speed_y && right_pad_y <= ball_y + BALL_WIDTH) begin
 							ball_x <= RIGHT_PAD_X - BALL_WIDTH;
 							ball_right <= !ball_right;
 						end
 						else begin
-							ball_x <= 8'b00011111;
-							ball_y <= 7'b0111111;
+							ball_x <= BALL_START_X;
+							ball_y <= BALL_START_Y;
 							speed_x <= 8'b00000001;
 							speed_y <= 7'b0000001;
 							ball_right <= !ball_right;
@@ -511,13 +521,13 @@ module datapath(
 				end
 				else begin
 					if(ball_x - speed_x <= LEFT_PAD_X + PAD_WIDTH) begin
-						if(right_pad_y + PAD_HEIGHT >= ball_y + BALL_WIDTH + speed_y >= right_pad_y) begin
+						if(left_pad_y + PAD_HEIGHT >= ball_y + speed_y && left_pad_y <= ball_y + BALL_WIDTH) begin
 							ball_x <= LEFT_PAD_X + PAD_WIDTH;
 							ball_right <= !ball_right;
 						end
 						else begin
-							ball_x <= 8'b00011111;
-							ball_y <= 7'b0111111;
+							ball_x <= BALL_START_X;
+							ball_y <= BALL_START_Y;
 							speed_x <= 8'b00000001;
 							speed_y <= 7'b0000001;
 							ball_right <= !ball_right;
@@ -545,10 +555,11 @@ module datapath(
 						ball_y <= ball_y - speed_y;
 				end
 			end
-			if(left_score >= 5 || right_score >= 5)
+			if(left_score >= 5 || right_score >= 5) begin
 				gameover <= 1;
+			end
 			if(draw_left_pad) begin			
-				if (y_delta >= 7) begin
+				if (y_delta >= PAD_HEIGHT - 1) begin
 					y_delta <= 0;
 					x_delta <= x_delta +1;
 				end
@@ -560,7 +571,7 @@ module datapath(
 				y <= left_pad_y + y_delta;
 			end
 			if(draw_right_pad) begin
-				if (y_delta >= 7) begin
+				if (y_delta >= PAD_HEIGHT - 1) begin
 					y_delta <= 0;
 					x_delta <= x_delta + 1;
 				end
@@ -616,19 +627,21 @@ endmodule
 module ai_player(
 	input clk,
 	input resetn,	
-	input ball_y,
-	input paddle_y,
+	input [7:0] ball_y,
+	input [7:0] paddle_y,
 	output reg ai_up,
 	output reg ai_down
 	);
 	
 	always @(*) begin
-		ai_up <= 0;
-		ai_down <= 0;
-		if(ball_y - 4 <= paddle_y)
+		ai_up = 0;
+		ai_down = 0;
+		if(ball_y - 4 <= paddle_y) begin
 			ai_up <= 1'b1;
-		else if (ball_y +4 >= paddle_y)
+		end
+		else if (ball_y + 8 >= paddle_y + 16) begin
 			ai_down <= 1'b1;
+		end
 	end
 endmodule
 
@@ -657,4 +670,3 @@ module hex_decoder(hex_digit, segments);
             default: segments = 7'h7f;
         endcase
 endmodule
-
