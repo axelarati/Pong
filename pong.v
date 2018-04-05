@@ -8,13 +8,21 @@
 `include "PS2MouseKeyboard/Altera_UP_PS2_Data_In.v"
 `include "PS2MouseKeyboard/PS2_Controller.v"
 
+/* ACKNOWLEDGEMENTS
+ *
+ * Credit for low-level PS/2 driver module:
+ * http://www.eecg.toronto.edu/~jayar/ece241_08F/AudioVideoCores/ps2/ps2.html
+ * 
+ * VGA module provided by course CSC258 at the University of Toronto
+ *
+ */
 module pong
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		KEY,
 		LEDR,
 		HEX0,
-		HEX1,
+		HEX5,
 		
 		// The ports below are for the VGA output.  Do not change.
 		VGA_CLK,   						//	VGA Clock
@@ -47,7 +55,7 @@ module pong
 	output	[9:0]	VGA_B;   				//	VGA Blue[9:0]
 	
 	output [6:0] HEX0;
-	output [6:0] HEX1;
+	output [6:0] HEX5;
 	
 	inout PS2_CLK;
 	inout PS2_DAT;
@@ -221,9 +229,9 @@ module pong
         .segments(HEX0)
         );
 
-	hex_decoder H1(
+	hex_decoder H5(
         .hex_digit(left_score),
-        .segments(HEX1)
+        .segments(HEX5)
         );
     
 endmodule
@@ -281,9 +289,9 @@ module control(
 	always @(*)
 	begin: state_table 
             case (current_state)
-                S_MENU: next_state = enter ? S_MOVE_PADS : S_MENU;
-                S_MOVE_PADS: next_state = S_MOVE_BALL;
-                S_MOVE_BALL: next_state = (gameover == 1) ? S_MENU : S_SET_UP_CLEAR_SCREEN; 
+                S_MENU: next_state = enter ? S_MOVE_BALL : S_MENU;
+				S_MOVE_BALL: next_state = (gameover == 1) ? S_MENU : S_MOVE_PADS; 
+                S_MOVE_PADS: next_state = S_SET_UP_CLEAR_SCREEN;
 				S_SET_UP_CLEAR_SCREEN: next_state = S_CLEAR_SCREEN;
 				S_CLEAR_SCREEN: next_state = (clear_screen_counter == 0) ? S_SET_UP_LEFT : S_CLEAR_SCREEN;
 				S_SET_UP_LEFT: next_state = S_DRAW_LEFT_PAD;
@@ -292,7 +300,7 @@ module control(
 				S_DRAW_RIGHT_PAD: next_state = (draw_right_pad_counter == 0) ? S_SET_UP_BALL : S_DRAW_RIGHT_PAD;
 				S_SET_UP_BALL: next_state = S_DRAW_BALL;
 				S_DRAW_BALL: next_state = (draw_ball_counter == 0) ? S_WAIT : S_DRAW_BALL;
-				S_WAIT: next_state = (frame_counter == 0) ? S_MOVE_PADS : S_WAIT;
+				S_WAIT: next_state = (frame_counter == 0) ? S_MOVE_BALL : S_WAIT;
 			default:     next_state = S_MENU;
         endcase
     end // state_table
@@ -524,43 +532,6 @@ module datapath(
 				end
 			end
 			if(move_ball) begin
-				if(ball_right) begin
-					if(ball_x + BALL_WIDTH + speed_x >= RIGHT_PAD_X) begin
-						if(right_pad_y + PAD_HEIGHT >= ball_y + speed_y && right_pad_y <= ball_y + BALL_WIDTH) begin
-							ball_x <= RIGHT_PAD_X - BALL_WIDTH;
-							ball_right <= !ball_right;
-						end
-						else begin
-							ball_x <= BALL_START_X;
-							ball_y <= BALL_START_Y;
-							speed_x <= 8'b00000001;
-							speed_y <= 7'b0000001;
-							ball_right <= !ball_right;
-							left_score <= left_score + 1;
-						end							
-					end
-					else
-						ball_x <= ball_x + speed_x;
-				end
-				else begin
-					if(ball_x - speed_x <= LEFT_PAD_X + PAD_WIDTH) begin
-						if(left_pad_y + PAD_HEIGHT >= ball_y + speed_y && left_pad_y <= ball_y + BALL_WIDTH) begin
-							ball_x <= LEFT_PAD_X + PAD_WIDTH;
-							ball_right <= !ball_right;
-						end
-						else begin
-							ball_x <= BALL_START_X;
-							ball_y <= BALL_START_Y;
-							speed_x <= 8'b00000001;
-							speed_y <= 7'b0000001;
-							ball_right <= !ball_right;
-							right_score <= right_score + 1;
-						end		
-					end
-					else
-						ball_x <= ball_x - speed_x;
-				end
-				
 				if(ball_down) begin
 					if(ball_y + BALL_WIDTH + speed_y >= 120 - BALL_WIDTH) begin
 						ball_y <= 120 - BALL_WIDTH;
@@ -576,6 +547,66 @@ module datapath(
 					end
 					else
 						ball_y <= ball_y - speed_y;
+				end
+				if(ball_right) begin
+					if(ball_x + BALL_WIDTH + speed_x >= RIGHT_PAD_X) begin
+						if(right_pad_y + PAD_HEIGHT >= ball_y && right_pad_y <= ball_y + BALL_WIDTH) begin
+							ball_x <= RIGHT_PAD_X - BALL_WIDTH;
+							ball_right <= !ball_right;
+							if(right_pad_y + (PAD_HEIGHT / 4) >= ball_y) begin
+								speed_y <= 7'b0000010;
+							end
+							else if(right_pad_y + (PAD_HEIGHT / 2) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else if(right_pad_y + (PAD_HEIGHT * 3 / 4) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else begin
+								speed_y <= 7'b0000010;
+							end
+						end
+						else begin
+							ball_x <= BALL_START_X;
+							ball_y <= BALL_START_Y;
+							speed_x <= 8'b00000001;
+							speed_y <= 7'b0000001;
+							ball_right <= !ball_right;
+							left_score <= left_score + 1;
+						end							
+					end
+					else
+						ball_x <= ball_x + speed_x;
+				end
+				else begin
+					if(ball_x - speed_x <= LEFT_PAD_X + PAD_WIDTH) begin
+						if(left_pad_y + PAD_HEIGHT >= ball_y && left_pad_y <= ball_y + BALL_WIDTH) begin
+							ball_x <= LEFT_PAD_X + PAD_WIDTH;
+							ball_right <= !ball_right;
+							if(left_pad_y + (PAD_HEIGHT / 4) >= ball_y) begin
+								speed_y <= 7'b0000010;
+							end
+							else if(left_pad_y + (PAD_HEIGHT / 2) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else if(left_pad_y + (PAD_HEIGHT * 3 / 4) >= ball_y) begin
+								speed_y <= 7'b0000001;
+							end
+							else begin
+								speed_y <= 7'b0000010;
+							end
+						end
+						else begin
+							ball_x <= BALL_START_X;
+							ball_y <= BALL_START_Y;
+							speed_x <= 8'b00000001;
+							speed_y <= 7'b0000001;
+							ball_right <= !ball_right;
+							right_score <= right_score + 1;
+						end		
+					end
+					else
+						ball_x <= ball_x - speed_x;
 				end
 			end
 			if(left_score >= 5 || right_score >= 5) begin
@@ -620,28 +651,11 @@ module datapath(
 		end
 	end
 	
-	// Choose colour
-	//reg [8:0] x_dist;
-	//reg [8:0] y_dist;
 	always @(*) begin
 		if(clear_screen)
 			colour <= 3'b000;
-		else if(draw_left_pad || draw_right_pad)
+		else if(draw_left_pad || draw_right_pad || draw_ball)
 			colour <= 3'b111;
-		else if(draw_ball) begin
-			// Calculate distance to center
-			/*x_dist <= (x_delta <= 2) ? 2 - x_delta : x_delta - 2;
-			y_dist <= {1'b1,(y_delta <= 2) ? 2 - y_delta : y_delta - 2};
-			
-			// Decide whether to draw a pixel or not
-			if(x_delta == 0 & y_delta == 0)
-				colour <= 3'b110;*/
-			//else if(x_dist * x_dist + y_dist * y_dist <= 4)
-			//if((x_delta == 0 || x_delta == 3) && (y_delta == 0 || y_delta == 4))
-			//	colour <= 3'b000;
-			//else
-			colour <= 3'b111;
-		end	
 		else
 			colour <= 3'b000;
 	end
@@ -661,23 +675,12 @@ module ai_player(
 	output reg ai_down
 	);
 	
-	/*always @(*) begin
-		ai_up = 0;
-		ai_down = 0;
-		if(ball_y - 4 <= paddle_y) begin
-			ai_up <= 1'b1;
-		end
-		else if (ball_y + 8 >= paddle_y + 16) begin
-			ai_down <= 1'b1;
-		end
-	end*/
-	
 	reg [8:0] y_dist;
 	reg [8:0] y_target;
 	always @(*) begin
 		ai_up = 0;
 		ai_down = 0;
-		y_dist = (160-ball_x) * (speed_y/speed_x);
+		y_dist = (160-ball_x-4) * (speed_y/speed_x);
 		
 		if(ball_right && ball_x >= 100) begin
 			if(ball_down) begin
@@ -722,3 +725,4 @@ module hex_decoder(hex_digit, segments);
             default: segments = 7'h7f;
         endcase
 endmodule
+
